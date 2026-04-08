@@ -1,0 +1,23 @@
+JOB mission
+VAR id
+# Execute the full automation mission once (no loop):
+# 1. Fetch the first active work item from Azure DevOps
+# 2. Fetch full work item details (comments + parent context)
+# 3. Mark work items as In Progress
+# 4. Identify repositories that need changes
+# 5. AI-analyse each repository against each work item
+# 6. Create feature branches in each repository
+# 7. Invoke Augment CLI to implement the required changes
+# 8. Commit all changes and push the feature branches
+# 9. Open pull requests in Azure DevOps
+# 10. Mark work items as Done
+fetch work item {id} details from Azure DevOps
+update work item state in Azure DevOps
+identify affected repositories
+analyze repositories with Augment
+create feature branches
+implement changes with Augment
+commit and push changes
+create pull requests in Azure DevOps
+update work item state in Azure DevOps
+

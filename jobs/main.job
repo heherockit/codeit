@@ -1,0 +1,10 @@
+JOB main
+LOOP
+fetch work items from Azure DevOps
+identify affected repositories
+analyze repositories with Augment
+create feature branches
+implement changes with Augment
+commit and push changes
+create pull requests in Azure DevOps
+
