@@ -1,4 +1,4 @@
-import type { SkillFn, SkillFnFactory, TechniqueRegistry } from './interfaces/ISkill.js';
+import type { SkillFn, SkillFnFactory, TechniqueFn, TechniqueRegistry } from './interfaces/ISkill.js';
 
 interface TechniqueEntry {
   description: string;
@@ -29,6 +29,59 @@ function parseTemplate(template: string): { paramNames: string[]; pattern: RegEx
   return { paramNames, pattern: new RegExp(`^${regexStr}$`) };
 }
 
+/**
+ * Extracts parameter names from a function signature by parsing its string
+ * representation. Skips the first parameter (assumed to be `ctx: SkillContext`).
+ */
+function parseFunctionParams(fn: Function): string[] {
+  const source = fn.toString();
+  const match = source.match(/^(?:async\s+)?(?:function\s+\w*\s*)?\(([^)]*)\)/);
+
+  if (!match?.[1]) return [];
+
+  return match[1]
+    .split(',')
+    .map((p) => p.replace(/[:=?].*/s, '').trim())
+    .filter(Boolean)
+    .slice(1);
+}
+
+/**
+ * Returns true when the supplied function is a `SkillFnFactory` rather than
+ * a direct `TechniqueFn`.
+ *
+ * Heuristic: A direct `TechniqueFn` always has `ctx` (or `context`) as its
+ * first parameter. A factory either has zero params (`() => fn`) or a single
+ * `params` parameter. If the first parameter is not `ctx`/`context`, treat
+ * it as a factory.
+ */
+function isFactory(fn: TechniqueFn | SkillFnFactory): fn is SkillFnFactory {
+  const source = fn.toString();
+  const match = source.match(/^(?:async\s+)?(?:function\s+\w*\s*)?\(([^)]*)\)/);
+
+  if (!match?.[1]?.trim()) return true;
+
+  const firstParam = match[1]
+    .split(',')[0]!
+    .replace(/[:=?].*/s, '')
+    .trim();
+
+  return firstParam !== 'ctx' && firstParam !== 'context';
+}
+
+/**
+ * Wraps a `TechniqueFn` in a `SkillFnFactory` that automatically maps
+ * template placeholder values to the function's positional arguments.
+ */
+function toFactory(fn: TechniqueFn, templateParamNames: string[]): SkillFnFactory {
+  const fnParamNames = parseFunctionParams(fn);
+
+  return (params: Record<string, string>): SkillFn => {
+    const args = fnParamNames.map((name) => templateParamNames.includes(name) ? params[name] : undefined);
+    return (ctx) => fn(ctx, ...args);
+  };
+}
+
 export interface SkillGroup {
   skillName: string;
   techniques: string[];
@@ -45,11 +98,14 @@ class ScopedTechniqueRegistry implements TechniqueRegistry {
     private readonly group: SkillGroup,
   ) {}
 
-  register(techniqueTitle: string, techniqueDescription: string, factory: SkillFnFactory): void {
+  register(techniqueTitle: string, techniqueDescription: string, fn: TechniqueFn | SkillFnFactory): void {
     if (this.map.has(techniqueTitle)) {
       throw new Error(`Technique '${techniqueTitle}' is already registered.`);
     }
+
     const { paramNames, pattern } = parseTemplate(techniqueTitle);
+    const factory = isFactory(fn) ? fn : toFactory(fn, paramNames);
+
     this.map.set(techniqueTitle, { description: techniqueDescription, factory, paramNames, pattern });
     this.group.techniques.push(techniqueTitle);
   }

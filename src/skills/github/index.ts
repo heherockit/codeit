@@ -32,10 +32,10 @@ function repoPath(cfg: GitHubConfig, repoOverride?: string): string {
 
 // ─── Query params builder ─────────────────────────────────────────────────────
 
-function buildIssueParams(cfg: GitHubConfig, state: Record<string, unknown>): URLSearchParams {
+function buildIssueParams(cfg: GitHubConfig, ctxState: Record<string, unknown>, stateOverride?: string): URLSearchParams {
   const params = new URLSearchParams();
-  const filterState = state['filterWorkItemState'] as string | undefined;
-  const assignee = state['filterAssignedTo'] as string | undefined;
+  const filterState = stateOverride ?? (ctxState['filterWorkItemState'] as string | undefined);
+  const assignee = ctxState['filterAssignedTo'] as string | undefined;
 
   const ghState = resolveGitHubState(filterState ?? cfg.inProgressState);
   params.set('state', ghState ?? 'open');
@@ -62,10 +62,10 @@ async function fetchIssueComments(base: string, issueNumber: string, http: Axios
 
 // ─── Action implementations ───────────────────────────────────────────────────
 
-async function fetchGitHubIssues(ctx: SkillContext): Promise<void> {
+async function fetchGitHubIssues(ctx: SkillContext, state?: string): Promise<void> {
   const { http, cfg } = requireGitHubConfig(ctx);
   const base = repoPath(cfg);
-  const params = buildIssueParams(cfg, ctx.state);
+  const params = buildIssueParams(cfg, ctx.state, state);
 
   const res = await http.get<GitHubIssue[]>(`${base}/issues?${params.toString()}`);
 
@@ -75,8 +75,9 @@ async function fetchGitHubIssues(ctx: SkillContext): Promise<void> {
   ctx.logger.info(`Fetched ${issues.length} GitHub issue(s).`);
 }
 
-async function fetchGitHubIssueById(issueNumber: string, ctx: SkillContext): Promise<void> {
+async function fetchGitHubIssueById(ctx: SkillContext, id?: string): Promise<void> {
   const { http, cfg } = requireGitHubConfig(ctx);
+  const issueNumber = id ?? '';
   const base = repoPath(cfg);
 
   const res = await http.get<GitHubIssue>(`${base}/issues/${issueNumber}`);
@@ -86,7 +87,9 @@ async function fetchGitHubIssueById(issueNumber: string, ctx: SkillContext): Pro
   ctx.logger.info(`Fetched GitHub issue #${issueNumber}.`);
 }
 
-async function updateGitHubIssueState(issueNumber: string, ctx: SkillContext): Promise<void> {
+async function updateGitHubIssueState(ctx: SkillContext, id?: string): Promise<void> {
+  const issueNumber = id ?? '';
+
   if (ctx.config.dryRun) {
     ctx.logger.info(`[dry-run] Skipping state update for GitHub issue #${issueNumber}.`);
     return;
@@ -102,7 +105,9 @@ async function updateGitHubIssueState(issueNumber: string, ctx: SkillContext): P
   ctx.logger.info(`Updated GitHub issue #${issueNumber} to state "${ghState}".`);
 }
 
-async function createGitHubPullRequest(issueNumber: string, ctx: SkillContext): Promise<void> {
+async function createGitHubPullRequest(ctx: SkillContext, id?: string): Promise<void> {
+  const issueNumber = id ?? '';
+
   if (ctx.config.dryRun) {
     ctx.logger.info(`[dry-run] Skipping pull request creation for GitHub issue #${issueNumber}.`);
     return;
@@ -169,20 +174,11 @@ function mapIssueState(stateName: string): WorkItemState {
 
 export function register(registry: SkillRegistry): void {
   registry.skill('github', (r) => {
-    r.register('fetch github issues', 'Fetches GitHub issues filtered by state and assignee.', () => fetchGitHubIssues);
-    r.register('fetch github issues with state {state}', 'Fetches GitHub issues filtered by the given state value (e.g. "open", "closed", "all").', (params) => async (ctx) => {
-      ctx.state['filterWorkItemState'] = params['state'] ?? '';
-      await fetchGitHubIssues(ctx);
-    });
-    r.register('fetch github issue {id} details', 'Fetches full details for a single GitHub issue by number, including comments.', (params) => async (ctx) => {
-      await fetchGitHubIssueById(params['id'] ?? '', ctx);
-    });
-    r.register('update github issue {id} state', 'Sets a GitHub issue to open or closed based on whether pull requests exist.', (params) => async (ctx) => {
-      await updateGitHubIssueState(params['id'] ?? '', ctx);
-    });
-    r.register('create github pull request {id}', 'Creates a draft GitHub pull request for the given issue using the feature branch from state.', (params) => async (ctx) => {
-      await createGitHubPullRequest(params['id'] ?? '', ctx);
-    });
+    r.register('fetch github issues', 'Fetches GitHub issues filtered by state and assignee.', fetchGitHubIssues);
+    r.register('fetch github issues with state {state}', 'Fetches GitHub issues filtered by the given state value (e.g. "open", "closed", "all").', fetchGitHubIssues);
+    r.register('fetch github issue {id} details', 'Fetches full details for a single GitHub issue by number, including comments.', fetchGitHubIssueById);
+    r.register('update github issue {id} state', 'Sets a GitHub issue to open or closed based on whether pull requests exist.', updateGitHubIssueState);
+    r.register('create github pull request {id}', 'Creates a draft GitHub pull request for the given issue using the feature branch from state.', createGitHubPullRequest);
   });
 }
 

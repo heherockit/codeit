@@ -23,10 +23,10 @@ function requireGitLabConfig(ctx: SkillContext): { http: AxiosInstance; cfg: Git
 
 // ─── Query params builder ─────────────────────────────────────────────────────
 
-function buildIssueParams(cfg: GitLabConfig, state: Record<string, unknown>): URLSearchParams {
+function buildIssueParams(cfg: GitLabConfig, ctxState: Record<string, unknown>, stateOverride?: string): URLSearchParams {
   const params = new URLSearchParams();
-  const filterState = state['filterWorkItemState'] as string | undefined;
-  const assignee = state['filterAssignedTo'] as string | undefined;
+  const filterState = stateOverride ?? (ctxState['filterWorkItemState'] as string | undefined);
+  const assignee = ctxState['filterAssignedTo'] as string | undefined;
 
   const gitlabState = resolveGitLabState(filterState ?? cfg.inProgressState);
   if (gitlabState) params.set('state', gitlabState);
@@ -52,10 +52,10 @@ async function fetchIssueNotes(projectId: string, issueIid: string, http: AxiosI
 
 // ─── Action implementations ───────────────────────────────────────────────────
 
-async function fetchGitLabIssues(ctx: SkillContext): Promise<void> {
+async function fetchGitLabIssues(ctx: SkillContext, state?: string): Promise<void> {
   const { http, cfg } = requireGitLabConfig(ctx);
   const projectId = cfg.projectId ?? '';
-  const params = buildIssueParams(cfg, ctx.state);
+  const params = buildIssueParams(cfg, ctx.state, state);
   const query = params.toString() ? `?${params.toString()}` : '';
 
   const res = await http.get<GitLabIssue[]>(`/api/v4/projects/${encodeURIComponent(projectId)}/issues${query}`);
@@ -63,8 +63,9 @@ async function fetchGitLabIssues(ctx: SkillContext): Promise<void> {
   ctx.logger.info(`Fetched ${res.data.length} GitLab issue(s).`);
 }
 
-async function fetchGitLabIssueById(issueIid: string, ctx: SkillContext): Promise<void> {
+async function fetchGitLabIssueById(ctx: SkillContext, id?: string): Promise<void> {
   const { http, cfg } = requireGitLabConfig(ctx);
+  const issueIid = id ?? '';
   const projectId = cfg.projectId ?? '';
 
   const res = await http.get<GitLabIssue>(`/api/v4/projects/${encodeURIComponent(projectId)}/issues/${issueIid}`);
@@ -74,7 +75,9 @@ async function fetchGitLabIssueById(issueIid: string, ctx: SkillContext): Promis
   ctx.logger.info(`Fetched GitLab issue #${issueIid}.`);
 }
 
-async function createGitLabMergeRequest(issueIid: string, ctx: SkillContext): Promise<void> {
+async function createGitLabMergeRequest(ctx: SkillContext, id?: string): Promise<void> {
+  const issueIid = id ?? '';
+
   if (ctx.config.dryRun) {
     ctx.logger.info(`[dry-run] Skipping merge request creation for GitLab issue #${issueIid}.`);
     return;
@@ -142,17 +145,10 @@ function mapIssueState(stateName: string): WorkItemState {
 
 export function register(registry: SkillRegistry): void {
   registry.skill('gitlab', (r) => {
-    r.register('fetch gitlab issues', 'Fetches GitLab issues filtered by state and assignee.', () => fetchGitLabIssues);
-    r.register('fetch gitlab issues with state {state}', 'Fetches GitLab issues filtered by the given state value (e.g. "opened", "closed").', (params) => async (ctx) => {
-      ctx.state['filterWorkItemState'] = params['state'] ?? '';
-      await fetchGitLabIssues(ctx);
-    });
-    r.register('fetch gitlab issue {id} details', 'Fetches full details for a single GitLab issue by IID, including notes.', (params) => async (ctx) => {
-      await fetchGitLabIssueById(params['id'] ?? '', ctx);
-    });
-    r.register('create gitlab merge request {id}', 'Creates a GitLab merge request for the given issue IID using the feature branch from state.', (params) => async (ctx) => {
-      await createGitLabMergeRequest(params['id'] ?? '', ctx);
-    });
+    r.register('fetch gitlab issues', 'Fetches GitLab issues filtered by state and assignee.', fetchGitLabIssues);
+    r.register('fetch gitlab issues with state {state}', 'Fetches GitLab issues filtered by the given state value (e.g. "opened", "closed").', fetchGitLabIssues);
+    r.register('fetch gitlab issue {id} details', 'Fetches full details for a single GitLab issue by IID, including notes.', fetchGitLabIssueById);
+    r.register('create gitlab merge request {id}', 'Creates a GitLab merge request for the given issue IID using the feature branch from state.', createGitLabMergeRequest);
   });
 }
 

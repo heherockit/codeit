@@ -280,7 +280,7 @@ export function register(registry: SkillRegistry): void {
   registry.skill('azure-devops', (r) => {
     r.register('fetch work items from Azure DevOps', 'Fetches the highest-priority work item from Azure DevOps using WIQL.', () => fetchWorkItems);
     r.register('fetch work item details from Azure DevOps', 'Enriches work items with full details including comments and parent context.', () => fetchWorkItemDetails);
-    r.register('fetch work item {id} details from Azure DevOps', 'Fetches full details for a single work item by ID, including comments and parent context.', (params) => async (ctx) => {
+    r.register('fetch work item {id} details from Azure DevOps', 'Fetches full details for a single work item by ID, including comments and parent context.', (params: Record<string, string>) => async (ctx: SkillContext) => {
       await fetchWorkItemByIdDetails(Number(params['id']), ctx);
     });
     r.register('update work item state in Azure DevOps', 'Transitions work items to In Progress or Done based on whether pull requests exist.', () => updateWorkItemState);

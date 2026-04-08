@@ -24,10 +24,10 @@ function requireJiraConfig(ctx: SkillContext): { http: AxiosInstance; cfg: JiraC
 
 // ─── JQL builder ──────────────────────────────────────────────────────────────
 
-function buildJql(cfg: JiraConfig, state: Record<string, unknown>): string {
+function buildJql(cfg: JiraConfig, ctxState: Record<string, unknown>, stateOverride?: string): string {
   const clauses: string[] = [];
-  const workItemState = (state['filterWorkItemState'] as string | undefined) ?? cfg.inProgressState;
-  const assignedTo = state['filterAssignedTo'] as string | undefined;
+  const workItemState = stateOverride ?? (ctxState['filterWorkItemState'] as string | undefined) ?? cfg.inProgressState;
+  const assignedTo = ctxState['filterAssignedTo'] as string | undefined;
 
   if (cfg.projectKey) clauses.push(`project = "${cfg.projectKey}"`);
   if (workItemState) clauses.push(`status = "${workItemState}"`);
@@ -45,9 +45,9 @@ async function fetchIssueComments(issueKey: string, http: AxiosInstance): Promis
 
 // ─── Action implementations ───────────────────────────────────────────────────
 
-async function fetchJiraTickets(ctx: SkillContext): Promise<void> {
+async function fetchJiraTickets(ctx: SkillContext, state?: string): Promise<void> {
   const { http, cfg } = requireJiraConfig(ctx);
-  const jql = buildJql(cfg, ctx.state);
+  const jql = buildJql(cfg, ctx.state, state);
   const fields = 'summary,description,issuetype,status,labels,components';
 
   const res = await http.get<JiraSearchResponse>(
@@ -58,8 +58,9 @@ async function fetchJiraTickets(ctx: SkillContext): Promise<void> {
   ctx.logger.info(`Fetched ${res.data.issues.length} Jira ticket(s).`);
 }
 
-async function fetchJiraTicketById(issueKey: string, ctx: SkillContext): Promise<void> {
+async function fetchJiraTicketById(ctx: SkillContext, id?: string): Promise<void> {
   const { http } = requireJiraConfig(ctx);
+  const issueKey = id ?? '';
   const fields = 'summary,description,issuetype,status,labels,components';
 
   const res = await http.get<JiraIssue>(`/rest/api/3/issue/${issueKey}?fields=${fields}`);
@@ -69,7 +70,8 @@ async function fetchJiraTicketById(issueKey: string, ctx: SkillContext): Promise
   ctx.logger.info(`Fetched Jira ticket ${issueKey}.`);
 }
 
-async function updateJiraTicketState(issueKey: string, ctx: SkillContext): Promise<void> {
+async function updateJiraTicketState(ctx: SkillContext, id?: string): Promise<void> {
+  const issueKey = id ?? '';
   if (ctx.config.dryRun) {
     ctx.logger.info(`[dry-run] Skipping state transition for Jira ticket ${issueKey}.`);
     return;
@@ -136,17 +138,10 @@ function mapIssueState(statusName: string): WorkItemState {
 
 export function register(registry: SkillRegistry): void {
   registry.skill('jira', (r) => {
-    r.register('fetch jira tickets', 'Fetches Jira issues using JQL filtered by project, assignee, and state.', () => fetchJiraTickets);
-    r.register('fetch jira tickets with state {state}', 'Fetches Jira issues filtered by the given status value (e.g. "In Progress", "Done").', (params) => async (ctx) => {
-      ctx.state['filterWorkItemState'] = params['state'] ?? '';
-      await fetchJiraTickets(ctx);
-    });
-    r.register('fetch jira ticket {id} details', 'Fetches full details for a single Jira issue by key, including comments.', (params) => async (ctx) => {
-      await fetchJiraTicketById(params['id'] ?? '', ctx);
-    });
-    r.register('update jira ticket {id} state', 'Transitions a Jira issue to In Progress or Done based on whether pull requests exist.', (params) => async (ctx) => {
-      await updateJiraTicketState(params['id'] ?? '', ctx);
-    });
+    r.register('fetch jira tickets', 'Fetches Jira issues using JQL filtered by project, assignee, and state.', fetchJiraTickets);
+    r.register('fetch jira tickets with state {state}', 'Fetches Jira issues filtered by the given status value (e.g. "In Progress", "Done").', fetchJiraTickets);
+    r.register('fetch jira ticket {id} details', 'Fetches full details for a single Jira issue by key, including comments.', fetchJiraTicketById);
+    r.register('update jira ticket {id} state', 'Transitions a Jira issue to In Progress or Done based on whether pull requests exist.', updateJiraTicketState);
   });
 }
 

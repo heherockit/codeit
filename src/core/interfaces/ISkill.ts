@@ -25,6 +25,14 @@ export type SkillFn = (context: SkillContext) => Promise<void>;
 export type SkillFnFactory = (params: Record<string, string>) => SkillFn;
 
 /**
+ * A technique function that receives the context plus additional string
+ * parameters extracted from the technique title template.
+ * Parameter names must match the `{paramName}` placeholders in the title.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TechniqueFn = (ctx: SkillContext, ...args: any[]) => Promise<void>;
+
+/**
  * A map of natural-language technique names to their implementation functions.
  */
 export type TechniqueMap = Record<string, SkillFn>;
@@ -32,8 +40,13 @@ export type TechniqueMap = Record<string, SkillFn>;
 /**
  * Scoped registrar passed to each skill's `register` callback.
  * Use it to register individual techniques under the parent skill name.
+ *
+ * Accepts either:
+ * - A `SkillFnFactory` for custom wiring (legacy).
+ * - A `TechniqueFn` whose parameter names (beyond `ctx`) are auto-matched
+ *   to `{paramName}` placeholders in the technique title.
  */
 export interface TechniqueRegistry {
-  register(techniqueTitle: string, techniqueDescription: string, factory: SkillFnFactory): void;
+  register(techniqueTitle: string, techniqueDescription: string, fn: TechniqueFn | SkillFnFactory): void;
 }
 

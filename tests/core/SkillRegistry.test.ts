@@ -161,5 +161,92 @@ describe('SkillRegistry', () => {
       expect(registry.list()).toEqual(['fetch work item {id}']);
     });
   });
+
+  describe('auto-wiring direct technique functions', () => {
+    it('auto-wires a function with no extra params (ctx only)', async () => {
+      const registry = new SkillRegistry();
+      const directFn = vi.fn().mockResolvedValue(undefined);
+
+      async function myTechnique(ctx: unknown): Promise<void> { await directFn(ctx); }
+
+      registry.skill('test', (r) => {
+        r.register('do something', 'desc', myTechnique);
+      });
+
+      const resolved = registry.resolve('do something');
+      const fakeCtx = { logger: {}, config: {}, state: {} };
+      await resolved(fakeCtx as never);
+
+      expect(directFn).toHaveBeenCalledWith(fakeCtx);
+    });
+
+    it('auto-wires a single template param to the matching function param', async () => {
+      const registry = new SkillRegistry();
+      const captured: unknown[] = [];
+
+      async function fetchById(ctx: unknown, id?: string): Promise<void> { captured.push(ctx, id); }
+
+      registry.skill('test', (r) => {
+        r.register('fetch item {id}', 'desc', fetchById);
+      });
+
+      const resolved = registry.resolve('fetch item 42');
+      const fakeCtx = { logger: {}, config: {}, state: {} };
+      await resolved(fakeCtx as never);
+
+      expect(captured).toEqual([fakeCtx, '42']);
+    });
+
+    it('auto-wires multiple params in the correct positional order', async () => {
+      const registry = new SkillRegistry();
+      const captured: unknown[] = [];
+
+      async function doStuff(ctx: unknown, name?: string, repo?: string): Promise<void> { captured.push(ctx, name, repo); }
+
+      registry.skill('test', (r) => {
+        r.register('create {name} in {repo}', 'desc', doStuff);
+      });
+
+      const resolved = registry.resolve('create feature/1 in my-repo');
+      const fakeCtx = { logger: {}, config: {}, state: {} };
+      await resolved(fakeCtx as never);
+
+      expect(captured).toEqual([fakeCtx, 'feature/1', 'my-repo']);
+    });
+
+    it('passes undefined for function params not in the template', async () => {
+      const registry = new SkillRegistry();
+      const captured: unknown[] = [];
+
+      async function doStuff(ctx: unknown, state?: string): Promise<void> { captured.push(ctx, state); }
+
+      registry.skill('test', (r) => {
+        r.register('do stuff', 'desc', doStuff);
+      });
+
+      const resolved = registry.resolve('do stuff');
+      const fakeCtx = { logger: {}, config: {}, state: {} };
+      await resolved(fakeCtx as never);
+
+      expect(captured).toEqual([fakeCtx, undefined]);
+    });
+
+    it('still supports SkillFnFactory as a fallback', () => {
+      const registry = new SkillRegistry();
+      let capturedParams: Record<string, string> | undefined;
+
+      registry.skill('test', (r) => {
+        r.register('fetch item {id}', 'desc', (params) => {
+          capturedParams = params;
+          return stubFn;
+        });
+      });
+
+      const fn = registry.resolve('fetch item 99');
+
+      expect(capturedParams).toEqual({ id: '99' });
+      expect(fn).toBe(stubFn);
+    });
+  });
 });
 
