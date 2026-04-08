@@ -130,6 +130,41 @@ describe('github skill – fetch github issues', () => {
   });
 });
 
+// ─── fetch github issues with state {state} ───────────────────────────────────
+
+describe('github skill – fetch github issues with state {state}', () => {
+  it('sends state=closed param when state param is "closed"', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: [makeIssue(5, 'Closed issue', 'closed')] });
+
+    const ctx = makeContext({}, { github: githubCfg });
+    await registry.resolve('fetch github issues with state closed')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain('state=closed');
+
+    const items = ctx.state['workItems'] as Array<{ id: string }>;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe('5');
+  });
+
+  it('sends state=all param when state param is "all"', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: [] });
+
+    const ctx = makeContext({}, { github: githubCfg });
+    await registry.resolve('fetch github issues with state all')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain('state=all');
+  });
+
+  it('throws when github config is missing', async () => {
+    const ctx = makeContext({}, {});
+    await expect(registry.resolve('fetch github issues with state open')(ctx)).rejects.toThrow(
+      'Missing required github config',
+    );
+  });
+});
+
 // ─── fetch github issue {id} details ─────────────────────────────────────────
 
 describe('github skill – fetch github issue {id} details', () => {

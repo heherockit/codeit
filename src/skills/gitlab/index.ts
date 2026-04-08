@@ -143,6 +143,10 @@ function mapIssueState(stateName: string): WorkItemState {
 export function register(registry: SkillRegistry): void {
   registry.skill('gitlab', (r) => {
     r.register('fetch gitlab issues', 'Fetches GitLab issues filtered by state and assignee.', () => fetchGitLabIssues);
+    r.register('fetch gitlab issues with state {state}', 'Fetches GitLab issues filtered by the given state value (e.g. "opened", "closed").', (params) => async (ctx) => {
+      ctx.state['filterWorkItemState'] = params['state'] ?? '';
+      await fetchGitLabIssues(ctx);
+    });
     r.register('fetch gitlab issue {id} details', 'Fetches full details for a single GitLab issue by IID, including notes.', (params) => async (ctx) => {
       await fetchGitLabIssueById(params['id'] ?? '', ctx);
     });

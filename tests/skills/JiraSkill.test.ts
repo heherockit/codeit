@@ -103,6 +103,40 @@ describe('jira skill – fetch jira tickets', () => {
   });
 });
 
+describe('jira skill – fetch jira tickets with state {state}', () => {
+  it('overrides filterWorkItemState with the param and fetches', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: { issues: [makeIssue('ITM-5', 'Done task', 'Done')] } });
+
+    const ctx = makeContext({}, { jira: jiraCfg });
+    await registry.resolve('fetch jira tickets with state Done')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain(encodeURIComponent('status = "Done"'));
+
+    const items = ctx.state['workItems'] as Array<{ id: string }>;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe('ITM-5');
+  });
+
+  it('uses the state param even when inProgressState is configured', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: { issues: [] } });
+
+    const ctx = makeContext({}, { jira: jiraCfg });
+    await registry.resolve('fetch jira tickets with state Backlog')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain(encodeURIComponent('status = "Backlog"'));
+    expect(url).not.toContain(encodeURIComponent('status = "In Progress"'));
+  });
+
+  it('throws when jira config is missing', async () => {
+    const ctx = makeContext({}, {});
+    await expect(registry.resolve('fetch jira tickets with state Done')(ctx)).rejects.toThrow(
+      'Missing required jira config',
+    );
+  });
+});
+
 describe('jira skill – fetch jira ticket {id} details', () => {
   it('fetches issue and populates comments', async () => {
     mockAxiosInstance.get

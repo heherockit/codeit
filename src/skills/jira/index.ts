@@ -137,6 +137,10 @@ function mapIssueState(statusName: string): WorkItemState {
 export function register(registry: SkillRegistry): void {
   registry.skill('jira', (r) => {
     r.register('fetch jira tickets', 'Fetches Jira issues using JQL filtered by project, assignee, and state.', () => fetchJiraTickets);
+    r.register('fetch jira tickets with state {state}', 'Fetches Jira issues filtered by the given status value (e.g. "In Progress", "Done").', (params) => async (ctx) => {
+      ctx.state['filterWorkItemState'] = params['state'] ?? '';
+      await fetchJiraTickets(ctx);
+    });
     r.register('fetch jira ticket {id} details', 'Fetches full details for a single Jira issue by key, including comments.', (params) => async (ctx) => {
       await fetchJiraTicketById(params['id'] ?? '', ctx);
     });

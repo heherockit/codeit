@@ -111,6 +111,39 @@ describe('gitlab skill – fetch gitlab issues', () => {
   });
 });
 
+describe('gitlab skill – fetch gitlab issues with state {state}', () => {
+  it('sends the resolved GitLab state param for "closed"', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: [makeIssue(3, 'Closed issue', 'closed')] });
+
+    const ctx = makeContext({}, { gitlab: gitlabCfg });
+    await registry.resolve('fetch gitlab issues with state closed')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain('state=closed');
+
+    const items = ctx.state['workItems'] as Array<{ id: string }>;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe('3');
+  });
+
+  it('sends state=opened for "In Progress"', async () => {
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: [] });
+
+    const ctx = makeContext({}, { gitlab: gitlabCfg });
+    await registry.resolve('fetch gitlab issues with state In Progress')(ctx);
+
+    const url = mockAxiosInstance.get.mock.calls[0]![0] as string;
+    expect(url).toContain('state=opened');
+  });
+
+  it('throws when gitlab config is missing', async () => {
+    const ctx = makeContext({}, {});
+    await expect(registry.resolve('fetch gitlab issues with state closed')(ctx)).rejects.toThrow(
+      'Missing required gitlab config',
+    );
+  });
+});
+
 describe('gitlab skill – fetch gitlab issue {id} details', () => {
   it('fetches issue and populates notes as comments', async () => {
     mockAxiosInstance.get
