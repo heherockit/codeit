@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type {
-  AppConfig, AzureDevOpsConfig, GitConfig, AugmentConfig, TelegramConfig, JiraConfig, GitLabConfig, GitHubConfig, LogLevel,
+  AppConfig, AzureDevOpsConfig, GitConfig, AugmentConfig, TraeConfig, TelegramConfig, JiraConfig, GitLabConfig, GitHubConfig, LogLevel,
 } from './types/WorkflowConfig.js';
 
 const VALID_LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -51,6 +51,7 @@ export class ConfigLoader {
       ...buildAdoSection(env),
       ...buildGitSection(env),
       ...buildAugmentSection(env),
+      ...buildTraeSection(env),
       ...buildTelegramSection(env),
       ...buildJiraSection(env),
       ...buildGitLabSection(env),
@@ -121,6 +122,25 @@ function buildAugmentSection(env: NodeJS.ProcessEnv): { augment: AugmentConfig }
   };
 }
 
+function buildTraeSection(env: NodeJS.ProcessEnv): { trae: TraeConfig } | object {
+  const keys = ['TRAE_CLI_PATH', 'TRAE_TIMEOUT_SECONDS', 'TRAE_MODEL', 'TRAE_EXTRA_ARGS'];
+  if (keys.every((k) => env[k] === undefined)) return {};
+
+  const extraArgs = env['TRAE_EXTRA_ARGS']
+    ?.split(',')
+    .map((value: string) => value.trim())
+    .filter(Boolean);
+
+  return {
+    trae: {
+      ...(env['TRAE_CLI_PATH'] !== undefined && { cliPath: env['TRAE_CLI_PATH'] }),
+      ...(env['TRAE_TIMEOUT_SECONDS'] !== undefined && { timeoutSeconds: Number(env['TRAE_TIMEOUT_SECONDS']) }),
+      ...(env['TRAE_MODEL'] !== undefined && { model: env['TRAE_MODEL'] }),
+      ...(extraArgs !== undefined && { extraArgs }),
+    } as TraeConfig,
+  };
+}
+
 function buildTelegramSection(env: NodeJS.ProcessEnv): { telegram: TelegramConfig } | object {
   const botToken = env['TELEGRAM_BOT_TOKEN'];
   const chatId = env['TELEGRAM_CHAT_ID'];
@@ -186,4 +206,3 @@ function buildJiraSection(env: NodeJS.ProcessEnv): { jira: JiraConfig } | object
     } as JiraConfig,
   };
 }
-

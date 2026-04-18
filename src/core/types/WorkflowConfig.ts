@@ -22,6 +22,7 @@ export interface AppConfig {
   readonly azureDevOps?: AzureDevOpsConfig;
   readonly git?: GitConfig;
   readonly augment?: AugmentConfig;
+  readonly trae?: TraeConfig;
   readonly telegram?: TelegramConfig;
   readonly jira?: JiraConfig;
   readonly gitlab?: GitLabConfig;
@@ -61,6 +62,13 @@ export interface AugmentConfig {
   readonly model?: string;
 }
 
+export interface TraeConfig {
+  readonly cliPath?: string;
+  readonly timeoutSeconds?: number;
+  readonly model?: string;
+  readonly extraArgs?: readonly string[];
+}
+
 export interface TelegramConfig {
   readonly botToken: string;
   readonly chatId: string;
@@ -93,4 +101,3 @@ export interface GitHubConfig {
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
